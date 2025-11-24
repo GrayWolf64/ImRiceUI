@@ -78,4 +78,4 @@ end
 
 return ImNoColor, StyleColorsDark,
     AddDrawCmd, AddRectFilled, AddRectOutline, AddText, AddLine,
-    AddTriangleFilled, RenderTextClipped, RenderArrow
+    AddTriangleFilled, RenderTextClipped

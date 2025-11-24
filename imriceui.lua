@@ -475,6 +475,11 @@ local function KeepAliveID(id)
     end
 end
 
+--- bool ImGui::ItemAdd
+-- local function ItemAdd(bb, id, nav_bb_arg, extra_flags)
+
+-- end
+
 --- void ImGuiStyle::ScaleAllSizes
 -- local function ScaleAllSizes(scale_factor)
 
