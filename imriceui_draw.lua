@@ -1,3 +1,7 @@
+local surface = surface
+local render  = render
+local draw    = draw
+
 local function ParseImGuiCol(str)
     local r, g, b, a = str:match("ImVec4%(([%d%.]+)f?, ([%d%.]+)f?, ([%d%.]+)f?, ([%d%.]+)f?%)")
     return {r = tonumber(r) * 255, g = tonumber(g) * 255, b = tonumber(b) * 255, a = tonumber(a) * 255}
@@ -23,4 +27,55 @@ local StyleColorsDark = {
     ResizeGripActive  = ParseImGuiCol("ImVec4(0.26f, 0.59f, 0.98f, 0.95f)")
 }
 
-return ImNoColor, StyleColorsDark
+local function AddDrawCmd(draw_list, draw_call, ...)
+    draw_list[#draw_list + 1] = {draw_call = draw_call, args = {...}}
+end
+
+local function AddRectFilled(draw_list, color, x, y, w, h)
+    AddDrawCmd(draw_list, surface.SetDrawColor, color)
+    AddDrawCmd(draw_list, surface.DrawRect, x, y, w, h)
+end
+
+local function AddRectOutline(draw_list, color, x, y, w, h, thickness)
+    AddDrawCmd(draw_list, surface.SetDrawColor, color)
+    AddDrawCmd(draw_list, surface.DrawOutlinedRect, x, y, w, h, thickness)
+end
+
+local function AddText(draw_list, text, font, x, y, color)
+    AddDrawCmd(draw_list, surface.SetTextPos, x, y)
+    AddDrawCmd(draw_list, surface.SetFont, font)
+    AddDrawCmd(draw_list, surface.SetTextColor, color)
+    AddDrawCmd(draw_list, surface.DrawText, text)
+end
+
+local function AddLine(draw_list, x1, y1, x2, y2, color)
+    AddDrawCmd(draw_list, surface.SetDrawColor, color)
+    AddDrawCmd(draw_list, surface.DrawLine, x1, y1, x2, y2)
+end
+
+--- Points must be in clockwise order
+local function AddTriangleFilled(draw_list, indices, color)
+    AddDrawCmd(draw_list, surface.SetDrawColor, color)
+    AddDrawCmd(draw_list, draw.NoTexture)
+    AddDrawCmd(draw_list, surface.DrawPoly, indices)
+end
+
+local function RenderTextClipped(draw_list, text, font, x, y, color, w, h)
+    surface.SetFont(font)
+    local text_width, text_height = surface.GetTextSize(text)
+    local need_clipping = text_width > w or text_height > h
+
+    if need_clipping then
+        AddDrawCmd(draw_list, render.SetScissorRect, x, y, x + w, y + h, true)
+    end
+
+    AddText(draw_list, text, font, x, y, color)
+
+    if need_clipping then
+        AddDrawCmd(draw_list, render.SetScissorRect, 0, 0, 0, 0, false)
+    end
+end
+
+return ImNoColor, StyleColorsDark,
+    AddDrawCmd, AddRectFilled, AddRectOutline, AddText, AddLine,
+    AddTriangleFilled, RenderTextClipped, RenderArrow

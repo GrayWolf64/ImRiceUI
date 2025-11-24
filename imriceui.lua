@@ -116,7 +116,36 @@ local function ImLerp(a, b, t) return a + (b - a) * t end
 local function ImClamp(v, min, max) return ImMin(ImMax(v, min), max) end
 local function ImTrunc(f) return ImFloor(f + 0.5) end
 
-local ImNoColor, StyleColorsDark = include("imriceui_draw.lua")
+local ImNoColor, StyleColorsDark,
+    AddDrawCmd, AddRectFilled, AddRectOutline, AddText, AddLine,
+    AddTriangleFilled, RenderTextClipped = include("imriceui_draw.lua")
+
+--- ImGui::RenderArrow
+local function RenderArrow(draw_list, x, y, color, dir, scale)
+    local h = GImRiceUI.FontSize
+    local r = h * 0.40 * scale
+
+    local center = {
+        x = x + h * 0.5,
+        y = y + h * 0.5 * scale
+    }
+
+    local a, b, c
+
+    if dir == ImDir_Up or dir == ImDir_Down then
+        if dir == ImDir_Up then r = -r end
+        a = {x = center.x + r *  0.000, y = center.y + r *  0.750}
+        b = {x = center.x + r * -0.866, y = center.y + r * -0.750}
+        c = {x = center.x + r *  0.866, y = center.y + r * -0.750}
+    elseif dir == ImDir_Left or dir == ImDir_Right then
+        if dir == ImDir_Left then r = -r end
+        a = {x = center.x + r *  0.750, y = center.y + r *  0.000}
+        b = {x = center.x + r * -0.750, y = center.y + r *  0.866}
+        c = {x = center.x + r * -0.750, y = center.y + r * -0.866}
+    end
+
+    AddTriangleFilled(draw_list, {a, b, c}, color)
+end
 
 local FontDataDefault = {
     font      = "Arial",
@@ -520,81 +549,6 @@ end
 
 local function ClearActiveID()
     SetActiveID(0, nil)
-end
-
-local function PushDrawCommand(draw_list, draw_call, ...)
-    draw_list[#draw_list + 1] = {draw_call = draw_call, args = {...}}
-end
-
-local function AddRectFilled(draw_list, color, x, y, w, h)
-    PushDrawCommand(draw_list, surface.SetDrawColor, color)
-    PushDrawCommand(draw_list, surface.DrawRect, x, y, w, h)
-end
-
-local function AddRectOutline(draw_list, color, x, y, w, h, thickness)
-    PushDrawCommand(draw_list, surface.SetDrawColor, color)
-    PushDrawCommand(draw_list, surface.DrawOutlinedRect, x, y, w, h, thickness)
-end
-
-local function AddText(draw_list, text, font, x, y, color)
-    PushDrawCommand(draw_list, surface.SetTextPos, x, y)
-    PushDrawCommand(draw_list, surface.SetFont, font)
-    PushDrawCommand(draw_list, surface.SetTextColor, color)
-    PushDrawCommand(draw_list, surface.DrawText, text)
-end
-
-local function AddLine(draw_list, x1, y1, x2, y2, color)
-    PushDrawCommand(draw_list, surface.SetDrawColor, color)
-    PushDrawCommand(draw_list, surface.DrawLine, x1, y1, x2, y2)
-end
-
-local function AddTriangleFilled(draw_list, indices, color)
-    PushDrawCommand(draw_list, surface.SetDrawColor, color)
-    PushDrawCommand(draw_list, draw.NoTexture)
-    PushDrawCommand(draw_list, surface.DrawPoly, indices)
-end
-
-local function RenderTextClipped(draw_list, text, font, x, y, color, w, h)
-    surface.SetFont(font)
-    local text_width, text_height = surface.GetTextSize(text)
-    local need_clipping = text_width > w or text_height > h
-
-    if need_clipping then
-        PushDrawCommand(draw_list, render.SetScissorRect, x, y, x + w, y + h, true)
-    end
-
-    AddText(draw_list, text, font, x, y, color)
-
-    if need_clipping then
-        PushDrawCommand(draw_list, render.SetScissorRect, 0, 0, 0, 0, false)
-    end
-end
-
---- ImGui::RenderArrow
-local function RenderArrow(draw_list, x, y, color, dir, scale)
-    local h = GImRiceUI.FontSize
-    local r = h * 0.40 * scale
-
-    local center = {
-        x = x + h * 0.5,
-        y = y + h * 0.5 * scale
-    }
-
-    local a, b, c
-
-    if dir == ImDir_Up or dir == ImDir_Down then
-        if dir == ImDir_Up then r = -r end
-        a = {x = center.x + r *  0.000, y = center.y + r *  0.750}
-        b = {x = center.x + r * -0.866, y = center.y + r * -0.750}
-        c = {x = center.x + r *  0.866, y = center.y + r * -0.750}
-    elseif dir == ImDir_Left or dir == ImDir_Right then
-        if dir == ImDir_Left then r = -r end
-        a = {x = center.x + r *  0.750, y = center.y + r *  0.000}
-        b = {x = center.x + r * -0.750, y = center.y + r *  0.866}
-        c = {x = center.x + r * -0.750, y = center.y + r * -0.866}
-    end
-
-    AddTriangleFilled(draw_list, {a, b, c}, color)
 end
 
 local function PushID(str_id)
