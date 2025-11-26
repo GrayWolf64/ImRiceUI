@@ -31,9 +31,9 @@ local function AddDrawCmd(draw_list, draw_call, ...)
     draw_list.CmdBuffer[#draw_list.CmdBuffer + 1] = {draw_call = draw_call, args = {...}}
 end
 
-local function AddRectFilled(draw_list, color, x, y, w, h)
+local function AddRectFilled(draw_list, color, p_min, p_max)
     AddDrawCmd(draw_list, surface.SetDrawColor, color)
-    AddDrawCmd(draw_list, surface.DrawRect, x, y, w, h)
+    AddDrawCmd(draw_list, surface.DrawRect, p_min.x, p_min.y, p_max.x - p_min.x, p_max.y - p_min.y)
 end
 
 local function AddRectOutline(draw_list, color, x, y, w, h, thickness)
@@ -48,9 +48,9 @@ local function AddText(draw_list, text, font, x, y, color)
     AddDrawCmd(draw_list, surface.DrawText, text)
 end
 
-local function AddLine(draw_list, x1, y1, x2, y2, color)
+local function AddLine(draw_list, p1, p2, color)
     AddDrawCmd(draw_list, surface.SetDrawColor, color)
-    AddDrawCmd(draw_list, surface.DrawLine, x1, y1, x2, y2)
+    AddDrawCmd(draw_list, surface.DrawLine, p1.x, p1.y, p2.x, p2.y)
 end
 
 --- Points must be in clockwise order

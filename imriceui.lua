@@ -23,9 +23,11 @@ local ImDir_Down  = 3
 local IM_FONT_SIZE_MIN = 4
 local IM_FONT_SIZE_MAX = 255
 
+local ImVector, ImVec2, ImRect = include("imriceui_internal.lua")
+
 local ImResizeGripDef = {
-    {CornerPos = {x = 1, y = 1}, InnerDir = {x = -1, y = -1}}, -- Bottom right grip
-    {CornerPos = {x = 0, y = 1}, InnerDir = {x =  1, y = -1}} -- Bottom left
+    {CornerPos = ImVec2(1, 1), InnerDir = ImVec2(-1, -1)}, -- Bottom right grip
+    {CornerPos = ImVec2(0, 1), InnerDir = ImVec2( 1, -1)} -- Bottom left
 }
 
 --- Notable: VGUIMousePressAllowed?
@@ -121,14 +123,11 @@ local ImNoColor, StyleColorsDark,
     AddTriangleFilled, RenderTextClipped = include("imriceui_draw.lua")
 
 --- ImGui::RenderArrow
-local function RenderArrow(draw_list, x, y, color, dir, scale)
+local function RenderArrow(draw_list, pos, color, dir, scale)
     local h = GImRiceUI.FontSize
     local r = h * 0.40 * scale
 
-    local center = {
-        x = x + h * 0.5,
-        y = y + h * 0.5 * scale
-    }
+    center = pos + ImVec2(h * 0.50, h * 0.50 * scale)
 
     local a, b, c
 
@@ -254,7 +253,7 @@ local function PushFont(font_name, font_size_base) -- FIXME: checks not implemen
         font_name = GImRiceUI.Font
     end
 
-    insert_at(GImRiceUI.FontStack, {
+    GImRiceUI.FontStack:push_back({
         Font = font_name,
         FontSizeBeforeScaling = GImRiceUI.FontSizeBase,
         FontSizeAfterScaling = GImRiceUI.FontSize
@@ -268,12 +267,12 @@ local function PushFont(font_name, font_size_base) -- FIXME: checks not implemen
 end
 
 local function PopFont()
-    if #GImRiceUI.FontStack == 0 then return end
+    if GImRiceUI.FontStack:size() == 0 then return end
 
-    local font_stack_data = GImRiceUI.FontStack[#GImRiceUI.FontStack]
+    local font_stack_data = GImRiceUI.FontStack:peek()
     SetCurrentFont(font_stack_data.Font, font_stack_data.FontSizeBeforeScaling, font_stack_data.FontSizeAfterScaling)
 
-    remove_at(GImRiceUI.FontStack)
+    GImRiceUI.FontStack:pop_back()
 end
 
 local function GetDefaultFont() -- FIXME: fix impl
@@ -295,7 +294,7 @@ local function UpdateFontsNewFrame() -- TODO: investigate
 
     SetCurrentFont(font_stack_data.Font, font_stack_data.FontSizeBeforeScaling, 0)
 
-    insert_at(GImRiceUI.FontStack, font_stack_data)
+    GImRiceUI.FontStack:push_back(font_stack_data)
 end
 
 --- void ImGui::UpdateFontsEndFrame
@@ -316,13 +315,11 @@ local MouseButtonMap = {
     [2] = MOUSE_RIGHT
 }
 
-local ImVector = include("imriceui_internal.lua")
-
 --- struct ImGuiContext
 local function CreateNewContext()
     GImRiceUI = {
         Style = {
-            FramePadding = {x = 4, y = 3},
+            FramePadding = ImVec2(4, 3),
 
             WindowRounding = 0,
 
@@ -331,7 +328,7 @@ local function CreateNewContext()
             FontSizeBase = 18,
             FontScaleMain = 1,
 
-            WindowMinSize = {w = 55, h = 55}
+            WindowMinSize = ImVec2(60, 60)
         },
         Config = DefaultConfig,
         Initialized = true,
@@ -345,7 +342,7 @@ local function CreateNewContext()
         CurrentWindow = nil,
 
         IO = {
-            MousePos = {x = 0, y = 0},
+            MousePos = ImVec2(0, 0),
             MouseX = gui.MouseX,
             MouseY = gui.MouseY,
             IsMouseDown = input.IsMouseDown,
@@ -361,16 +358,18 @@ local function CreateNewContext()
         },
 
         MovingWindow = nil,
-        ActiveIDClickOffset = {x = 0, y = 0},
+        ActiveIDClickOffset = ImVec2(0, 0),
 
         HoveredWindow = nil,
 
         ActiveID = 0, -- Active widget
-        ActiveIDWindow = 0, -- Active window
+        ActiveIDWindow = nil, -- Active window
 
         ActiveIDIsJustActivated = false,
 
         ActiveIDIsAlive = nil,
+
+        ActiveIDPreviousFrame = 0,
 
         DeactivatedItemData = {
             ID = 0,
@@ -384,6 +383,9 @@ local function CreateNewContext()
         NavWindow = nil,
 
         FrameCount = 0,
+
+        FrameCountEnded = -1,
+        FrameCountRendered = -1,
 
         NextItemData = {
 
@@ -406,7 +408,7 @@ local function CreateNewContext()
         FontSizeBase = 18,
 
         --- Contains ImFontStackData
-        FontStack = {}
+        FontStack = ImVector()
     }
 
     hook.Add("PostGamemodeLoaded", "ImGDummyWindow", function()
@@ -417,7 +419,9 @@ local function CreateNewContext()
 end
 
 local function CreateNewWindow(name)
-    if not GImRiceUI then return end
+    local g = GImRiceUI
+
+    if not g then return end
 
     local window_id = ImHashStr(name)
 
@@ -428,9 +432,9 @@ local function CreateNewWindow(name)
         MoveID = 0,
 
         Name = name,
-        Pos = {x = GImRiceUI.Config.WindowPos.x, y = GImRiceUI.Config.WindowPos.y},
-        Size = {w = GImRiceUI.Config.WindowSize.w, h = GImRiceUI.Config.WindowSize.h}, -- Current size (==SizeFull or collapsed title bar size)
-        SizeFull = {w = GImRiceUI.Config.WindowSize.w, h = GImRiceUI.Config.WindowSize.h},
+        Pos = ImVec2(g.Config.WindowPos.x, g.Config.WindowPos.y),
+        Size = ImVec2(g.Config.WindowSize.w, g.Config.WindowSize.h), -- Current size (==SizeFull or collapsed title bar size)
+        SizeFull = ImVec2(g.Config.WindowSize.w, g.Config.WindowSize.h),
 
         TitleBarHeight = 0,
 
@@ -447,7 +451,7 @@ local function CreateNewWindow(name)
             _ClipRectStack = {}
         },
 
-        IDStack = {},
+        IDStack = ImVector(),
 
         --- struct IMGUI_API ImGuiWindowTempData
         DC = {
@@ -465,9 +469,9 @@ local function CreateNewWindow(name)
         LastFrameActive = -1
     }
 
-    GImRiceUI.WindowsByID[window_id] = window
+    g.WindowsByID[window_id] = window
 
-    GImRiceUI.Windows:push_back(window)
+    g.Windows:push_back(window)
 
     return window
 end
@@ -476,13 +480,6 @@ end
 --- void ImGui::PushClipRect
 
 --- void ImGui::PopClipRect
-
-local function Overlaps(this, other)
-    return not (this.max.x < other.min.x or
-                this.min.x > other.max.x or
-                this.max.y < other.min.y or
-                this.min.y > other.max.y)
-end
 
 --- void ImGui::KeepAliveID(ImGuiID id)
 local function KeepAliveID(id)
@@ -521,7 +518,7 @@ local function ItemAdd(bb, id, nav_bb_arg, extra_flags)
     -- g.NextItemData.HasFlags = ImGuiNextItemDataFlags_None;
     -- g.NextItemData.ItemFlags = ImGuiItemFlags_None;
 
-    local is_rect_visible = Overlaps(bb, window.ClipRect)
+    -- local is_rect_visible = Overlaps(bb, window.ClipRect)
 end
 
 --- void ImGuiStyle::ScaleAllSizes
@@ -529,20 +526,22 @@ end
 
 -- end
 
---- ImGui::BringWindowToDisplayFront
+--- void ImGui::BringWindowToDisplayFront(ImGuiWindow* window)
 local function BringWindowToDisplayFront(window)
-    local current_front_window = GImRiceUI.Windows:peek()
+    local g = GImRiceUI
+
+    local current_front_window = g.Windows:peek()
 
     if current_front_window == window then return end
 
-    for i, this_window in ipairs(GImRiceUI.Windows) do
+    for i, this_window in g.Windows:iter() do
         if this_window == window then
-            GImRiceUI.Windows:erase(i)
+            g.Windows:erase(i)
             break
         end
     end
 
-    GImRiceUI.Windows:push_back(window)
+    g.Windows:push_back(window)
 end
 
 --- void ImGui::SetNavWindow
@@ -603,48 +602,49 @@ end
 local function PushID(str_id)
     local window = GImRiceUI.CurrentWindow
     if not window then return end
-    insert_at(window.IDStack, str_id)
+
+    window.IDStack:push_back(str_id)
 end
 
 local function PopID()
     local window = GImRiceUI.CurrentWindow
     if not window then return end
 
-    if #window.IDStack > 0 then
-        remove_at(window.IDStack)
-    end
+    window.IDStack:pop_back()
 end
 
+local table_concat = table.concat
 local function GetID(str_id)
     local window = GImRiceUI.CurrentWindow
     if not window then return end
 
-    local full_string = table.concat(window.IDStack, "#") .. "#" .. (str_id or "")
+    local full_string = table_concat(window.IDStack._items, "#") .. "#" .. (str_id or "") -- FIXME: no _items
 
     return ImHashStr(full_string)
 end
 
-local function IsMouseHoveringRect(x, y, w, h)
-    if GImRiceUI.IO.MousePos.x < x or
-        GImRiceUI.IO.MousePos.y < y or
-        GImRiceUI.IO.MousePos.x >= x + w or
-        GImRiceUI.IO.MousePos.y >= y + h then
+local function IsMouseHoveringRect(r_min, r_max)
+    local rect_clipped = ImRect(r_min, r_max)
 
-        return false
-    end
+    return rect_clipped:contains_point(GImRiceUI.IO.MousePos)
+end
 
-    return true
+--- void ImGui::SetHoveredID
+local function SetHoveredID(id)
+    local g = GImRiceUI
+
+    g.HoveredID = id
 end
 
 --- bool ImGui::ItemHoverable
-local function ItemHoverable(id, x, y, w, h)
+local function ItemHoverable(id, bb)
     local window = GImRiceUI.CurrentWindow
 
     if GImRiceUI.HoveredWindow ~= window then
         return false
     end
 
-    if not IsMouseHoveringRect(x, y, w, h) then
+    if not IsMouseHoveringRect(bb.Min, bb.Max) then
         return false
     end
 
@@ -653,35 +653,64 @@ local function ItemHoverable(id, x, y, w, h)
     end
 
     if id ~= 0 then
-        GImRiceUI.HoveredID = id
+        SetHoveredID(id)
     end
 
     return true
 end
 
-local function ButtonBehavior(button_id, x, y, w, h)
+--- bool ImGui::IsMouseDown
+local function IsMouseDown(button)
+    local g = GImRiceUI
+
+    return g.IO.MouseDown[button]
+end
+
+--- bool ImGui::IsMouseClicked
+local function IsMouseClicked(button)
+    local g = GImRiceUI
+
+    if not g.IO.MouseDown[button] then
+        return false
+    end
+
+    local t = g.IO.MouseDownDuration[button]
+    if t < 0 then
+        return false
+    end
+
+    local pressed = (t == 0)
+    if not pressed then
+        return false
+    end
+
+    return true
+end
+
+local function ButtonBehavior(button_id, bb)
     if not GImRiceUI.CurrentWindow or not GImRiceUI.CurrentWindow.Open then
         return false, false, false
     end
 
     local io = GImRiceUI.IO
-    local hovered = ItemHoverable(button_id, x, y, w, h)
+    local hovered = ItemHoverable(button_id, bb)
+
     local pressed = false
+    if hovered then
+        if IsMouseClicked(1) then
+            pressed = true
 
-    if hovered and io.MouseClicked[1] then
-        pressed = true
-
-        SetActiveID(button_id, GImRiceUI.CurrentWindow) -- FIXME: is this correct?
+            SetActiveID(button_id, GImRiceUI.CurrentWindow) -- FIXME: is this correct?
+        end
     end
 
     local held = false
     if GImRiceUI.ActiveID == button_id then
         if GImRiceUI.ActiveIDIsJustActivated then
-            GImRiceUI.ActiveIDClickOffset.x = io.MousePos.x - x
-            GImRiceUI.ActiveIDClickOffset.y = io.MousePos.y - y
+            GImRiceUI.ActiveIDClickOffset = io.MousePos - bb.Min
         end
 
-        if io.MouseDown[1] then
+        if IsMouseDown(1) then
             held = true
         else
             ClearActiveID()
@@ -699,8 +728,8 @@ end
 --- static ImVec2 CalcWindowSizeAfterConstraint
 local function CalcWindowSizeAfterConstraint(window, size_desired)
     return {
-        w = ImMax(size_desired.w, GImRiceUI.Style.WindowMinSize.w),
-        h = ImMax(size_desired.h, GImRiceUI.Style.WindowMinSize.h)
+        w = ImMax(size_desired.w, GImRiceUI.Style.WindowMinSize.x),
+        h = ImMax(size_desired.h, GImRiceUI.Style.WindowMinSize.y)
     }
 end
 
@@ -711,8 +740,8 @@ local function CalcResizePosSizeFromAnyCorner(window, corner_target, corner_pos)
         y = ImLerp(corner_target.y, window.Pos.y, corner_pos.y)
     }
     local pos_max = {
-        x = ImLerp(window.Pos.x + window.Size.w, corner_target.x, corner_pos.x),
-        y = ImLerp(window.Pos.y + window.Size.h, corner_target.y, corner_pos.y)
+        x = ImLerp(window.Pos.x + window.Size.x, corner_target.x, corner_pos.x),
+        y = ImLerp(window.Pos.y + window.Size.y, corner_target.y, corner_pos.y)
     }
     local size_expected = {
         w = pos_max.x - pos_min.x,
@@ -747,28 +776,17 @@ local function UpdateWindowManualResize(window)
         local corner_pos = ImResizeGripDef[i].CornerPos
         local inner_dir = ImResizeGripDef[i].InnerDir
 
-        local corner = {
-            x = window.Pos.x + corner_pos.x * window.Size.w,
-            y = window.Pos.y + corner_pos.y * window.Size.h
-        }
+        local corner = ImVec2(window.Pos.x + corner_pos.x * window.Size.x, window.Pos.y + corner_pos.y * window.Size.y)
 
-        local resize_rect = {
-            x = corner.x - inner_dir.x * grip_hover_outer_size,
-            y = corner.y - inner_dir.y * grip_hover_outer_size,
-            w = inner_dir.x * (grip_hover_inner_size + grip_hover_outer_size),
-            h = inner_dir.y * (grip_hover_inner_size + grip_hover_outer_size)
-        }
+        local resize_rect = ImRect(corner - inner_dir * grip_hover_outer_size, corner + inner_dir * grip_hover_inner_size)
 
-        if resize_rect.w < 0 then
-            resize_rect.x = resize_rect.x + resize_rect.w
-            resize_rect.w = -resize_rect.w
-        end
-        if resize_rect.h < 0 then
-            resize_rect.y = resize_rect.y + resize_rect.h
-            resize_rect.h = -resize_rect.h
-        end
+        if resize_rect.Min.x > resize_rect.Max.x then resize_rect.Min.x, resize_rect.Max.x = resize_rect.Max.x, resize_rect.Min.x end
+        if resize_rect.Min.y > resize_rect.Max.y then resize_rect.Min.y, resize_rect.Max.y = resize_rect.Max.y, resize_rect.Min.y end
 
-        local pressed, hovered, held = ButtonBehavior(GetID(i), resize_rect.x, resize_rect.y, resize_rect.w, resize_rect.h)
+        local resize_grip_id = GetID(i)
+
+        ItemAdd(nil, resize_grip_id) -- TODO: feed bb
+        local pressed, hovered, held = ButtonBehavior(resize_grip_id, resize_rect)
 
         if hovered or held then
             GImRiceUI.MovingWindow = nil
@@ -782,27 +800,24 @@ local function UpdateWindowManualResize(window)
         if held then
             -- TODO: simplify, extract into funcs above
             local min_size = GImRiceUI.Style.WindowMinSize
-            local max_size = {w = INF, h = INF}
+            local max_size = {x = INF, y = INF}
 
-            local clamp_rect = {
-                Min = {x = window.Pos.x + min_size.w, y = window.Pos.y + min_size.h},
-                Max = {x = window.Pos.x + max_size.w, y = window.Pos.y + max_size.h}
-            } -- visibility rect?
+            local clamp_rect = ImRect(window.Pos + min_size, window.Pos + max_size) -- visibility rect?
 
-            local clamp_min = {
-                x = (corner_pos.x == 1.0) and clamp_rect.Min.x or -INF,
-                y = (corner_pos.y == 1.0) and clamp_rect.Min.y or -INF
-            }
+            local clamp_min = ImVec2(
+                (corner_pos.x == 1.0) and clamp_rect.Min.x or -INF,
+                (corner_pos.y == 1.0) and clamp_rect.Min.y or -INF
+            )
 
-            local clamp_max = {
-                x = (corner_pos.x == 0.0) and clamp_rect.Max.x or INF,
-                y = (corner_pos.y == 0.0) and clamp_rect.Max.y or INF
-            }
+            local clamp_max = ImVec2(
+                (corner_pos.x == 0.0) and clamp_rect.Max.x or INF,
+                (corner_pos.y == 0.0) and clamp_rect.Max.y or INF
+            )
 
-            local corner_target = {
-                x = GImRiceUI.IO.MousePos.x - GImRiceUI.ActiveIDClickOffset.x + ImLerp(inner_dir.x * grip_hover_outer_size, inner_dir.x * -grip_hover_inner_size, corner_pos.x),
-                y = GImRiceUI.IO.MousePos.y - GImRiceUI.ActiveIDClickOffset.y + ImLerp(inner_dir.y * grip_hover_outer_size, inner_dir.y * -grip_hover_inner_size, corner_pos.y)
-            }
+            local corner_target = ImVec2(
+                GImRiceUI.IO.MousePos.x - GImRiceUI.ActiveIDClickOffset.x + ImLerp(inner_dir.x * grip_hover_outer_size, inner_dir.x * -grip_hover_inner_size, corner_pos.x),
+                GImRiceUI.IO.MousePos.y - GImRiceUI.ActiveIDClickOffset.y + ImLerp(inner_dir.y * grip_hover_outer_size, inner_dir.y * -grip_hover_inner_size, corner_pos.y)
+            )
 
             corner_target.x = ImClamp(corner_target.x, clamp_min.x, clamp_max.x)
             corner_target.y = ImClamp(corner_target.y, clamp_min.y, clamp_max.y)
@@ -822,14 +837,14 @@ local function UpdateWindowManualResize(window)
         resize_grip_colors[i] = grip_color
     end
 
-    if size_target.w ~= INF and (window.Size.w ~= size_target.w or window.SizeFull.w ~= size_target.w) then
-        window.Size.w = size_target.w
-        window.SizeFull.w = size_target.w
+    if size_target.w ~= INF and (window.Size.x ~= size_target.w or window.SizeFull.x ~= size_target.w) then
+        window.Size.x = size_target.w
+        window.SizeFull.x = size_target.w
     end
 
-    if size_target.h ~= INF and (window.Size.h ~= size_target.h or window.SizeFull.h ~= size_target.h) then
-        window.Size.h = size_target.h
-        window.SizeFull.h = size_target.h
+    if size_target.h ~= INF and (window.Size.y ~= size_target.h or window.SizeFull.y ~= size_target.h) then
+        window.Size.y = size_target.h
+        window.SizeFull.y = size_target.h
     end
 
     if pos_target.x ~= INF and window.Pos.x ~= ImFloor(pos_target.x) then
@@ -845,43 +860,49 @@ local function UpdateWindowManualResize(window)
     return resize_grip_colors
 end
 
-local function CloseButton(id, x, y, w, h)
-    local window = GImRiceUI.CurrentWindow
-    local pressed, hovered = ButtonBehavior(id, x, y, w, h)
+local function CloseButton(id, pos)
+    local g = GImRiceUI
+    local window = g.CurrentWindow
+
+    local bb = ImRect(pos, pos + ImVec2(g.FontSize, g.FontSize))
+
+    local is_clipped = not ItemAdd(nil, id) -- TODO: feed bb
+
+    local pressed, hovered = ButtonBehavior(id, bb)
 
     if hovered then
-        AddRectFilled(window.DrawList, GImRiceUI.Style.Colors.ButtonHovered, x, y, w, h)
+        AddRectFilled(window.DrawList, g.Style.Colors.ButtonHovered, bb.Min, bb.Max)
     end
 
     --- DrawLine draws lines of different thickness, why? Antialiasing
-    -- AddText(window.DrawList, "X", "ImCloseButtonCross", x + w * 0.25, y, GImRiceUI.Style.Colors.Text)
-    local center_x = x + w * 0.5 - 0.5
-    local center_y = y + h * 0.5 - 0.5
-    local cross_extent = w * 0.5 * 0.7071 - 1
+    -- AddText(window.DrawList, "X", "ImCloseButtonCross", x + w * 0.25, y, g.Style.Colors.Text)
+    local cross_center = bb:GetCenter() - ImVec2(0.5, 0.5)
+    local cross_extent = g.FontSize * 0.5 * 0.7071 - 1
 
-    AddLine(window.DrawList, center_x - cross_extent, center_y - cross_extent,
-            center_x + cross_extent, center_y + cross_extent,
-            GImRiceUI.Style.Colors.Text)
-
-    AddLine(window.DrawList, center_x + cross_extent, center_y - cross_extent,
-            center_x - cross_extent, center_y + cross_extent,
-            GImRiceUI.Style.Colors.Text)
+    AddLine(window.DrawList, cross_center + ImVec2(cross_extent, cross_extent), cross_center + ImVec2(-cross_extent, -cross_extent), g.Style.Colors.Text)
+    AddLine(window.DrawList, cross_center + ImVec2(cross_extent, -cross_extent), cross_center + ImVec2(-cross_extent, cross_extent), g.Style.Colors.Text)
 
     return pressed
 end
 
-local function CollapseButton(id, x, y, w, h)
-    local window = GImRiceUI.CurrentWindow
-    local pressed, hovered = ButtonBehavior(id, x, y, w, h)
+local function CollapseButton(id, pos)
+    local g = GImRiceUI
+    local window = g.CurrentWindow
+
+    local bb = ImRect(pos, pos + ImVec2(g.FontSize, g.FontSize))
+
+    local is_clipped = not ItemAdd(nil, id) -- TODO: feed bb
+
+    local pressed, hovered = ButtonBehavior(id, bb)
 
     if hovered then
-        AddRectFilled(window.DrawList, GImRiceUI.Style.Colors.ButtonHovered, x, y, w, h)
+        AddRectFilled(window.DrawList, g.Style.Colors.ButtonHovered, bb.Min, bb.Max)
     end
 
     if window.Collapsed then
-        RenderArrow(window.DrawList, x, y, GImRiceUI.Style.Colors.Text, ImDir_Right, 1)
+        RenderArrow(window.DrawList, bb.Min, g.Style.Colors.Text, ImDir_Right, 1)
     else
-        RenderArrow(window.DrawList, x, y, GImRiceUI.Style.Colors.Text, ImDir_Down, 1)
+        RenderArrow(window.DrawList, bb.Min, g.Style.Colors.Text, ImDir_Down, 1)
     end
 
     return pressed
@@ -909,21 +930,19 @@ local function RenderWindowDecorations(window, titlebar_is_highlight, resize_gri
 
     if window.Collapsed then
         AddRectFilled(window.DrawList, g.Style.Colors.TitleBgCollapsed,
-            window.Pos.x + border_width, window.Pos.y + border_width,
-            window.Size.w - 2 * border_width,
-            window.TitleBarHeight - 2 * border_width)
+            ImVec2(window.Pos.x + border_width, window.Pos.y + border_width),
+            ImVec2(window.Pos.x + window.Size.x - border_width, window.Pos.y + window.TitleBarHeight - border_width))
         AddRectOutline(window.DrawList, g.Style.Colors.Border,
             window.Pos.x, window.Pos.y,
-            window.Size.w, window.TitleBarHeight, border_width)
+            window.Size.x, window.TitleBarHeight, border_width)
     else
         AddRectFilled(window.DrawList, title_color,
-            window.Pos.x + border_width, window.Pos.y + border_width,
-            window.Size.w - 2 * border_width,
-            window.TitleBarHeight)
+            ImVec2(window.Pos.x + border_width, window.Pos.y + border_width),
+            ImVec2(window.Pos.x + window.Size.x - border_width, window.Pos.y + window.TitleBarHeight))
         -- Window background
         AddRectFilled(window.DrawList, g.Style.Colors.WindowBg,
-            window.Pos.x + border_width, window.Pos.y + window.TitleBarHeight + border_width,
-            window.Size.w - 2 * border_width, window.Size.h - window.TitleBarHeight - border_width)
+            ImVec2(window.Pos.x + border_width, window.Pos.y + window.TitleBarHeight),
+            ImVec2(window.Pos.x + window.Size.x - border_width, window.Pos.y + window.Size.y))
 
         -- Resize grip(s)
         for i = 1, #ImResizeGripDef do
@@ -931,8 +950,8 @@ local function RenderWindowDecorations(window, titlebar_is_highlight, resize_gri
             local inner_dir = ImResizeGripDef[i].InnerDir
 
             local corner = {
-                x = window.Pos.x + corner_pos.x * window.Size.w,
-                y = window.Pos.y + corner_pos.y * window.Size.h
+                x = window.Pos.x + corner_pos.x * window.Size.x,
+                y = window.Pos.y + corner_pos.y * window.Size.y
             }
 
             local padding = border_width * 1.3
@@ -957,7 +976,7 @@ local function RenderWindowDecorations(window, titlebar_is_highlight, resize_gri
         -- RenderWindowOuterBorders?
         AddRectOutline(window.DrawList, g.Style.Colors.Border,
             window.Pos.x, window.Pos.y,
-            window.Size.w, window.Size.h, border_width)
+            window.Size.x, window.Size.y, border_width)
     end
 end
 
@@ -970,29 +989,27 @@ local function RenderWindowTitleBarContents(window)
     local button_size = g.FontSize
 
     local collapse_button_size = button_size -- TODO: impl has_close_button and etc. based
-    local collapse_button_x = window.Pos.x + pad_l
-    local collapse_button_y = window.Pos.y + g.Style.FramePadding.y
+    local collapse_button_pos = ImVec2(window.Pos.x + pad_l, window.Pos.y + g.Style.FramePadding.y) -- TODO: titlebarrect
 
     local close_button_size = button_size
-    local close_button_x = window.Pos.x + window.Size.w - button_size - pad_r
-    local close_button_y = window.Pos.y + g.Style.FramePadding.y
+    local close_button_pos = ImVec2(window.Pos.x + window.Size.x - button_size - pad_r, window.Pos.y + g.Style.FramePadding.y)
 
-    if CollapseButton(GetID("#COLLAPSE"), collapse_button_x, collapse_button_y, collapse_button_size, collapse_button_size) then
+    if CollapseButton(GetID("#COLLAPSE"), collapse_button_pos) then
         window.Collapsed = not window.Collapsed
     end
 
-    if CloseButton(GetID("#CLOSE"), close_button_x, close_button_y, close_button_size, close_button_size) then
+    if CloseButton(GetID("#CLOSE"), close_button_pos) then
         window.Open = false
     end
 
     -- Title text
     surface.SetFont(g.Font) -- TODO: layouting
     local _, text_h = surface.GetTextSize(window.Name)
-    local text_clip_width = window.Size.w - window.TitleBarHeight - close_button_size - collapse_button_size
+    local text_clip_width = window.Size.x - window.TitleBarHeight - close_button_size - collapse_button_size
     RenderTextClipped(window.DrawList, window.Name, g.Font,
         window.Pos.x + window.TitleBarHeight, window.Pos.y + (window.TitleBarHeight - text_h) / 1.3,
         g.Style.Colors.Text,
-        text_clip_width, window.Size.h)
+        text_clip_width, window.Size.y)
 end
 
 local function Render()
@@ -1003,6 +1020,23 @@ local function Render()
             end
         end
     end
+end
+
+--- void ImGui::SetWindowPos
+local function SetWindowPos(window, pos)
+    local old_pos = {x = window.Pos.x, y = window.Pos.y}
+
+    window.Pos.x = ImTrunc(pos.x)
+    window.Pos.y = ImTrunc(pos.y)
+
+    local offset = {x = window.Pos.x - old_pos.x, y = window.Pos.y - old_pos.y}
+
+    if offset.x == 0 and offset.y == 0 then return end
+
+    -- window->DC.CursorPos += offset;
+    -- window->DC.CursorMaxPos += offset;
+    -- window->DC.IdealMaxPos += offset;
+    -- window->DC.CursorStartPos += offset;
 end
 
 --- void ImGui::StartMouseMovingWindow
@@ -1020,19 +1054,28 @@ end
 
 --- void ImGui::UpdateMouseMovingWindowNewFrame
 local function UpdateMouseMovingWindowNewFrame()
-    local window = GImRiceUI.MovingWindow
+    local g = GImRiceUI
+    local window = g.MovingWindow
 
     if window then
-        if GImRiceUI.IO.MouseDown[1] then
-            window.Pos.x = GImRiceUI.IO.MousePos.x - GImRiceUI.ActiveIDClickOffset.x
-            window.Pos.y = GImRiceUI.IO.MousePos.y - GImRiceUI.ActiveIDClickOffset.y
+        KeepAliveID(g.ActiveID)
 
-            FocusWindow(GImRiceUI.MovingWindow)
+        if g.IO.MouseDown[1] then
+            SetWindowPos(window, g.IO.MousePos - g.ActiveIDClickOffset)
+
+            FocusWindow(g.MovingWindow)
         else
             StopMouseMovingWindow()
             ClearActiveID()
         end
-    -- else
+    else
+        if (g.ActiveIDWindow and g.ActiveIDWindow.MoveID == g.ActiveID) then
+            KeepAliveID(g.ActiveID)
+
+            if g.IO.MouseDown[1] then
+                ClearActiveID()
+            end
+        end
     end
 end
 
@@ -1047,7 +1090,7 @@ local function UpdateMouseMovingWindowEndFrame()
             StartMouseMovingWindow(hovered_window)
         else -- TODO: investigate elseif (hovered_window == nil and g.NavWindow == nil) 
             FocusWindow(nil)
-            GImRiceUI.ActiveIDWindow = 0
+            GImRiceUI.ActiveIDWindow = nil
         end
     end
 end
@@ -1067,6 +1110,7 @@ end
 
 local function Begin(name)
     if name == nil or name == "" then return false end
+    -- IM_ASSERT(g.FrameCountEnded != g.FrameCount)
 
     local window = FindWindowByName(name)
     local window_just_created = (window == nil)
@@ -1086,9 +1130,8 @@ local function Begin(name)
 
     GImRiceUI.CurrentWindow = window
 
-    for i = #window.IDStack, 1, -1 do
-        window.IDStack[i] = nil
-    end
+    window.IDStack:clear_delete()
+
     PushID(window_id)
     window.MoveID = GetID("#MOVE") -- TODO: investigate
 
@@ -1101,9 +1144,9 @@ local function Begin(name)
     if window.Collapsed then
         window.Active = false
 
-        window.Size.h = window.TitleBarHeight
+        window.Size.y = window.TitleBarHeight
     else
-        window.Size.h = window.SizeFull.h
+        window.Size.y = window.SizeFull.y
     end
 
     for i = #window.DrawList.CmdBuffer, 1, -1 do
@@ -1145,9 +1188,9 @@ local function FindHoveredWindow()
         local window = GImRiceUI.Windows:at(i)
 
         if window and window.Open then
-            x, y, w, h = window.Pos.x, window.Pos.y, window.Size.w, window.Size.h
+            x, y, w, h = window.Pos.x, window.Pos.y, window.Size.x, window.Size.y
 
-            local hit = IsMouseHoveringRect(x, y, w, h)
+            local hit = IsMouseHoveringRect(window.Pos, ImVec2(window.Pos.x + window.Size.x, window.Pos.y + window.Size.y))
 
             if hit and GImRiceUI.HoveredWindow == nil then
                 GImRiceUI.HoveredWindow = window
@@ -1206,26 +1249,30 @@ local function UpdateMouseInputs()
 end
 
 local function NewFrame()
-    if not GImRiceUI or not GImRiceUI.Initialized then return end
+    local g = GImRiceUI
 
-    GImRiceUI.CurrentWindowStack:clear()
+    if not g or not g.Initialized then return end
 
-    GImRiceUI.CurrentWindow = nil
+    g.CurrentWindowStack:clear_delete()
+
+    g.CurrentWindow = nil
 
     UpdateFontsNewFrame()
 
     UpdateMouseInputs()
 
-    GImRiceUI.HoveredID = 0
-    GImRiceUI.HoveredWindow = nil
+    g.HoveredID = 0
+    g.HoveredWindow = nil
 
-    -- if (g.ActiveId != 0 && g.ActiveIdIsAlive != g.ActiveId && g.ActiveIdPreviousFrame == g.ActiveId)
-    -- {
-    --     IMGUI_DEBUG_LOG_ACTIVEID("NewFrame(): ClearActiveID() because it isn't marked alive anymore!\n");
-    --     ClearActiveID();
-    -- }
+    if (g.ActiveID ~= 0 and g.ActiveIDIsAlive ~= g.ActiveID and g.ActiveIDPreviousFrame == g.ActiveID) then
+        print("NewFrame(): ClearActiveID() because it isn't marked alive anymore!\n");
+        --FIXME: ActiveIDIsAlive is nil?
+        ClearActiveID()
+    end
 
-    GImRiceUI.ActiveIDIsJustActivated = false
+    g.ActiveIDPreviousFrame = g.ActiveID
+    g.ActiveIDIsAlive = 0
+    g.ActiveIDIsJustActivated = false
 
     FindHoveredWindow()
 
@@ -1234,6 +1281,11 @@ end
 
 --- TODO: FrameCountEnded
 local function EndFrame()
+    local g = GImRiceUI
+
+    if g.FrameCountEnded == g.FrameCount then return end
+
+    g.FrameCountEnded = g.FrameCount
     UpdateFontsEndFrame()
 
     UpdateMouseMovingWindowEndFrame()
@@ -1262,6 +1314,18 @@ hook.Add("PostRender", "ImRiceUI", function()
     EndFrame()
 
     Render()
+
+    -- Temporary
+    draw.DrawText(
+        str_format(
+            "ActiveID: %s\nActiveIDWindow: %s\nActiveIDIsAlive: %s\nActiveIDPreviousFrame: %s\nMem: %dkb",
+            GImRiceUI.ActiveID,
+            GImRiceUI.ActiveIDWindow and GImRiceUI.ActiveIDWindow.ID or nil,
+            GImRiceUI.ActiveIDIsAlive,
+            GImRiceUI.ActiveIDPreviousFrame,
+            ImRound(collectgarbage("count"))
+        ), "CloseCaption_Bold", 0, 0, color_white
+    )
 
     cam.End2D()
 end)
