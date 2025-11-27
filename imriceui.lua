@@ -10,6 +10,8 @@ local ipairs = ipairs
 local ScrW = ScrW
 local ScrH = ScrH
 
+local SysTime = SysTime
+
 local INF = math.huge
 
 local GImRiceUI = nil
@@ -315,7 +317,7 @@ local MouseButtonMap = {
 }
 
 --- struct ImGuiContext
-local function CreateNewContext()
+local function CreateContext()
     GImRiceUI = {
         Style = {
             FramePadding = ImVec2(4, 3),
@@ -1308,18 +1310,31 @@ local function EndFrame()
     UpdateFontsEndFrame()
 
     UpdateMouseMovingWindowEndFrame()
+end
 
-    g.IO.DeltaTime = RealFrameTime() -- FIXME:
+local ImRiceUI_ImplGMOD_Data = ImRiceUI_ImplGMOD_Data or { -- TODO: polish
+    Time = 0
+}
+
+local function ImRiceUI_ImplGMOD_NewFrame()
+    local io = GImRiceUI.IO
+
+    local current_time = SysTime()
+    io.DeltaTime = (current_time - ImRiceUI_ImplGMOD_Data.Time) / 1
+
+    ImRiceUI_ImplGMOD_Data.Time = current_time
 end
 
 --- void ImGui::Shutdown()
 
 -- test here
 
-CreateNewContext()
+CreateContext()
 
 hook.Add("PostRender", "ImRiceUI", function()
     cam.Start2D()
+
+    ImRiceUI_ImplGMOD_NewFrame()
 
     NewFrame()
 
