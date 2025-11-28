@@ -1360,15 +1360,16 @@ hook.Add("PostRender", "ImRiceUI", function()
     Render()
 
     -- Temporary
+    local g = GImRiceUI
     draw.DrawText(
         str_format(
             "ActiveID: %s\nActiveIDWindow: %s\nActiveIDIsAlive: %s\nActiveIDPreviousFrame: %s\n\nMem: %dkb\nFramerate: %d",
-            GImRiceUI.ActiveID,
-            GImRiceUI.ActiveIDWindow and GImRiceUI.ActiveIDWindow.ID or nil,
-            GImRiceUI.ActiveIDIsAlive,
-            GImRiceUI.ActiveIDPreviousFrame,
+            g.ActiveID,
+            g.ActiveIDWindow and g.ActiveIDWindow.ID or nil,
+            g.ActiveIDIsAlive,
+            g.ActiveIDPreviousFrame,
             ImRound(collectgarbage("count")),
-            GImRiceUI.IO.Framerate
+            g.IO.Framerate
         ), "CloseCaption_Bold", 0, 0, color_white
     )
 
