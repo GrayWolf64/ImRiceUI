@@ -137,17 +137,17 @@ local function RenderArrow(draw_list, pos, color, dir, scale)
 
     if dir == ImDir_Up or dir == ImDir_Down then
         if dir == ImDir_Up then r = -r end
-        a = {x = center.x + r *  0.000, y = center.y + r *  0.750}
-        b = {x = center.x + r * -0.866, y = center.y + r * -0.750}
-        c = {x = center.x + r *  0.866, y = center.y + r * -0.750}
+        a = ImVec2( 0.000,  0.750) * r
+        b = ImVec2(-0.866, -0.750) * r
+        c = ImVec2( 0.866, -0.750) * r
     elseif dir == ImDir_Left or dir == ImDir_Right then
         if dir == ImDir_Left then r = -r end
-        a = {x = center.x + r *  0.750, y = center.y + r *  0.000}
-        b = {x = center.x + r * -0.750, y = center.y + r *  0.866}
-        c = {x = center.x + r * -0.750, y = center.y + r * -0.866}
+        a = ImVec2( 0.750,  0.000) * r
+        b = ImVec2(-0.750,  0.866) * r
+        c = ImVec2(-0.750, -0.866) * r
     end
 
-    AddTriangleFilled(draw_list, {a, b, c}, color)
+    AddTriangleFilled(draw_list, {center + a, center + b, center + c}, color)
 end
 
 local FontDataDefault = {
