@@ -306,9 +306,7 @@ end
 
 local DefaultConfig = {
     WindowSize = {w = 500, h = 480},
-    WindowPos = {x = 0, y = 0},
-
-    WindowBorderWidth = 1,
+    WindowPos = {x = 0, y = 0}
 }
 
 --- Index starts from 1
@@ -330,8 +328,11 @@ local function CreateContext()
             FontSizeBase = 18,
             FontScaleMain = 1,
 
-            WindowMinSize = ImVec2(60, 60)
+            WindowMinSize = ImVec2(60, 60),
+
+            FrameBorderSize = 1
         },
+
         Config = DefaultConfig,
         Initialized = true,
 
@@ -492,6 +493,10 @@ local function CreateNewWindow(name)
     g.Windows:push_back(window)
 
     return window
+end
+
+local function TitleBarRect(window) -- TODO: as a method?
+    return ImRect(window.Pos, ImVec2(window.Pos.x + window.SizeFull.x, window.Pos.y + window.TitleBarHeight))
 end
 
 --- TODO: fix drawlist
@@ -925,15 +930,24 @@ local function CollapseButton(id, pos)
     return pressed
 end
 
---- ImGui::RenderFrame, ImGui::RenderFrameBorder
--- local function RenderFrame(draw_list, x, y, w, h)
-
--- end
-
 --- ImGui::RenderMouseCursor
 
+--- ImGui::RenderFrame
+local function RenderFrame(p_min, p_max, fill_col, borders, rounding) -- TODO: implement rounding
+    local g = GImRiceUI
+    local window = g.CurrentWindow
+
+    AddRectFilled(window.DrawList, fill_col, p_min, p_max, rounding)
+
+    local border_size = g.Style.FrameBorderSize
+    if borders and border_size > 0 then
+        AddRectOutline(window.DrawList, g.Style.Colors.BorderShadow, p_min + ImVec2(1, 1), p_max + ImVec2(1, 1), border_size)
+        AddRectOutline(window.DrawList, g.Style.Colors.Border, p_min, p_max, border_size)
+    end
+end
+
 --- ImGui::RenderWindowDecorations
-local function RenderWindowDecorations(window, titlebar_is_highlight, resize_grip_colors, resize_grip_draw_size)
+local function RenderWindowDecorations(window, title_bar_rect, titlebar_is_highlight, resize_grip_colors, resize_grip_draw_size)
     local g = GImRiceUI
 
     local title_color
@@ -943,23 +957,17 @@ local function RenderWindowDecorations(window, titlebar_is_highlight, resize_gri
         title_color = g.Style.Colors.TitleBg
     end
 
-    local border_width = g.Config.WindowBorderWidth
+    local border_width = g.Style.FrameBorderSize
 
     if window.Collapsed then
-        AddRectFilled(window.DrawList, g.Style.Colors.TitleBgCollapsed,
-            ImVec2(window.Pos.x + border_width, window.Pos.y + border_width),
-            ImVec2(window.Pos.x + window.Size.x - border_width, window.Pos.y + window.TitleBarHeight - border_width))
-        AddRectOutline(window.DrawList, g.Style.Colors.Border,
-            window.Pos,
-            ImVec2(window.Pos.x + window.Size.x, window.Pos.y + window.TitleBarHeight, border_width))
+        RenderFrame(title_bar_rect.Min, title_bar_rect.Max, g.Style.Colors.TitleBgCollapsed, true)
     else
+        -- Title bar
         AddRectFilled(window.DrawList, title_color,
-            ImVec2(window.Pos.x + border_width, window.Pos.y + border_width),
-            ImVec2(window.Pos.x + window.Size.x - border_width, window.Pos.y + window.TitleBarHeight))
+            title_bar_rect.Min, title_bar_rect.Max)
         -- Window background
         AddRectFilled(window.DrawList, g.Style.Colors.WindowBg,
-            ImVec2(window.Pos.x + border_width, window.Pos.y + window.TitleBarHeight),
-            ImVec2(window.Pos.x + window.Size.x - border_width, window.Pos.y + window.Size.y))
+            window.Pos + ImVec2(0, window.TitleBarHeight), window.Pos + window.Size)
 
         -- Resize grip(s)
         for i = 1, #ImResizeGripDef do
@@ -989,8 +997,7 @@ local function RenderWindowDecorations(window, titlebar_is_highlight, resize_gri
 
         -- RenderWindowOuterBorders?
         AddRectOutline(window.DrawList, g.Style.Colors.Border,
-            window.Pos,
-            ImVec2(window.Pos.x + window.Size.x, window.Pos.y + window.Size.y, border_width))
+            window.Pos, window.Pos + window.Size, border_width)
     end
 end
 
@@ -1172,9 +1179,11 @@ local function Begin(name)
     end
     local resize_grip_draw_size = ImTrunc(ImMax(GImRiceUI.FontSize * 1.10, GImRiceUI.Style.WindowRounding + 1.0 + GImRiceUI.FontSize * 0.2));
 
+    local title_bar_rect = TitleBarRect(window)
+
     local title_bar_is_highlight = (GImRiceUI.NavWindow == window) -- TODO: proper cond, just simple highlight now
 
-    RenderWindowDecorations(window, title_bar_is_highlight, resize_grip_colors, resize_grip_draw_size)
+    RenderWindowDecorations(window, title_bar_rect, title_bar_is_highlight, resize_grip_colors, resize_grip_draw_size)
 
     RenderWindowTitleBarContents(window)
 
@@ -1354,7 +1363,7 @@ hook.Add("PostRender", "ImRiceUI", function()
     NewFrame()
 
     -- Temporary, internal function used
-    UpdateCurrentFontSize(ImMax(10, math.abs(90 * math.sin(SysTime()))))
+    UpdateCurrentFontSize(ImMax(15, math.abs(90 * math.sin(SysTime()))))
 
     Begin("Hello World!")
     End()

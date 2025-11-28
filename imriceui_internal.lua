@@ -145,8 +145,8 @@ end
 
 local function _ImRect(min, max)
     return setmetatable({
-        Min = {x = min.x or 0, y = min.y or 0},
-        Max = {x = max.x or 0, y = max.y or 0}
+        Min = _ImVec2(min.x or 0, min.y or 0),
+        Max = _ImVec2(max.x or 0, max.y or 0)
     }, ImRect)
 end
 
