@@ -148,23 +148,7 @@ local function RenderArrow(draw_list, pos, color, dir, scale)
     AddTriangleFilled(draw_list, {center + a, center + b, center + c}, color)
 end
 
-local FontDataDefault = {
-    font      = "Arial",
-    size      = 13,
-    weight    = 500,
-    blursize  = 0,
-    scanlines = 0,
-    extended  = false,
-    antialias = true,
-    underline = false,
-    italic    = false,
-    strikeout = false,
-    symbol    = false,
-    rotary    = false,
-    shadow    = false,
-    additive  = false,
-    outline   = false
-}
+local FontDataDefault = include("imriceui_h.lua")
 
 local str_format = string.format
 local function ImHashFontData(font_data)

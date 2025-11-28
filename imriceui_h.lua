@@ -1,5 +1,23 @@
 local bit = bit
 
+local FontDataDefault = {
+    font      = "Arial",
+    size      = 13,
+    weight    = 500,
+    blursize  = 0,
+    scanlines = 0,
+    extended  = false,
+    antialias = true,
+    underline = false,
+    italic    = false,
+    strikeout = false,
+    symbol    = false,
+    rotary    = false,
+    shadow    = false,
+    additive  = false,
+    outline   = false
+}
+
 --- enum ImGuiWindowFlags_
 local ImGuiWindowFlags_ = {
     None                      = 0,
@@ -77,3 +95,5 @@ local ImGuiItemStatusFlags_ = {
 -- ImGuiItemStatusFlags_.Checkable = bit.lshift(1, 22)
 -- ImGuiItemStatusFlags_.Checked   = bit.lshift(1, 23)
 -- ImGuiItemStatusFlags_.Inputable = bit.lshift(1, 24)
+
+return FontDataDefault
