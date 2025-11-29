@@ -1017,6 +1017,7 @@ local function RenderWindowTitleBarContents(window)
         text_clip_width, window.Size.y)
 end
 
+local unpack = unpack
 local function Render()
     for _, window in GImRiceUI.Windows:iter() do
         if window and window.Open and window.DrawList then
