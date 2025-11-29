@@ -35,12 +35,6 @@ function ImVector:clear_delete()
     self._top = 0
 end
 
-function ImVector:delete()
-
-end
-
-function ImVector:clear_destruct() self:clear_delete() end
-
 function ImVector:size() return self._top end
 function ImVector:empty() return self._top == 0 end
 
@@ -109,8 +103,8 @@ function ImVec2:__eq(other)
     return self.x == other.x and self.y == other.y
 end
 
-function ImVec2:delete()
-
+function ImVec2:copy()
+    return _ImVec2(self.x, self.y)
 end
 
 --- struct ImVec4
@@ -148,17 +142,9 @@ function ImVec4:__eq(other)
     return self.x == other.x and self.y == other.y and self.z == other.z and self.w == other.w
 end
 
-function ImVec4:delete()
-
-end
-
 --- struct IMGUI_API ImRect
 local ImRect = {}
 ImRect.__index = ImRect
-
-function ImRect:delete()
-
-end
 
 function ImRect:contains(other)
     return other.Min.x >= self.Min.x and other.Max.x <= self.Max.x and

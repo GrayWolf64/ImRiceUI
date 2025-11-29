@@ -1030,12 +1030,12 @@ end
 
 --- void ImGui::SetWindowPos
 local function SetWindowPos(window, pos)
-    local old_pos = {x = window.Pos.x, y = window.Pos.y}
+    local old_pos = window.Pos:copy()
 
     window.Pos.x = ImTrunc(pos.x)
     window.Pos.y = ImTrunc(pos.y)
 
-    local offset = {x = window.Pos.x - old_pos.x, y = window.Pos.y - old_pos.y}
+    local offset = window.Pos - old_pos
 
     if offset.x == 0 and offset.y == 0 then return end
 
