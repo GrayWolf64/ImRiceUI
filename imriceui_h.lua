@@ -18,6 +18,15 @@ local FontDataDefault = {
     outline   = false
 }
 
+local pairs = pairs
+local function FontCopy(font_data)
+    local copy = {}
+    for k, v in pairs(font_data) do
+        copy[k] = v
+    end
+    return copy
+end
+
 --- enum ImGuiWindowFlags_
 local ImGuiWindowFlags_ = {
     None                      = 0,
@@ -96,4 +105,4 @@ local ImGuiItemStatusFlags_ = {
 -- ImGuiItemStatusFlags_.Checked   = bit.lshift(1, 23)
 -- ImGuiItemStatusFlags_.Inputable = bit.lshift(1, 24)
 
-return FontDataDefault
+return FontDataDefault, FontCopy

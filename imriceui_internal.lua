@@ -5,6 +5,7 @@ local remove_at    = table.remove
 local setmetatable = setmetatable
 local next         = next
 local isnumber     = isnumber
+local str_format   = string.format
 
 --- A compact ImVector clone, maybe
 -- ImVector<>
@@ -107,6 +108,10 @@ function ImVec2:copy()
     return _ImVec2(self.x, self.y)
 end
 
+function ImVec2:__tostring()
+    return str_format("ImVec2(%g, %g)", self.x, self.y)
+end
+
 --- struct ImVec4
 local ImVec4 = {}
 ImVec4.__index = ImVec4
@@ -142,6 +147,24 @@ function ImVec4:__eq(other)
     return self.x == other.x and self.y == other.y and self.z == other.z and self.w == other.w
 end
 
+--- ImVec1
+local ImVec1 = {}
+ImVec1.__index = ImVec1
+
+function _ImVec1(x)
+    return setmetatable({
+        x = x or 0
+    }, ImVec1)
+end
+
+function ImVec1:copy()
+    return ImVec1.new(self.x)
+end
+
+function ImVec1:__tostring()
+    return str_format("ImVec1(%g)", self.x)
+end
+
 --- struct IMGUI_API ImRect
 local ImRect = {}
 ImRect.__index = ImRect
@@ -168,11 +191,16 @@ function ImRect:GetCenter()
     )
 end
 
+function ImRect:__tostring()
+    return str_format("ImRect(Min: %g,%g, Max: %g,%g)",
+        self.Min.x, self.Min.y, self.Max.x, self.Max.y)
+end
+
 local function _ImRect(min, max)
     return setmetatable({
-        Min = _ImVec2(min.x or 0, min.y or 0),
-        Max = _ImVec2(max.x or 0, max.y or 0)
+        Min = _ImVec2(min and min.x or 0, min and min.y or 0),
+        Max = _ImVec2(max and max.x or 0, max and max.y or 0)
     }, ImRect)
 end
 
-return _ImVector, _ImVec2, _ImVec4, _ImRect
+return _ImVector, _ImVec2, _ImVec4, _ImVec1, _ImRect
