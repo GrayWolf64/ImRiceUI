@@ -59,17 +59,17 @@ local function SetupDummyPanel()
 
     GDummyPanel:SetVisible(false)
 
-    GDummyPanel.Paint = function(self, w, h)
+    GDummyPanel.Paint = function(self, w, h) -- FIXME: block derma modal panels
         -- surface.SetDrawColor(0, 255, 0)
         -- surface.DrawOutlinedRect(0, 0, w, h, 4)
     end
 end
 
-local function AttachDummyPanel(x, y, w, h)
+local function AttachDummyPanel(x, y, size)
     if not IsValid(GDummyPanel) then return end
 
     GDummyPanel:SetPos(x, y)
-    GDummyPanel:SetSize(w, h)
+    GDummyPanel:SetSize(size.x, size.y)
     GDummyPanel:SetVisible(true)
     GDummyPanel:MakePopup()
     GDummyPanel:SetKeyboardInputEnabled(false)
@@ -286,6 +286,7 @@ local MouseButtonMap = {
 }
 
 --- struct ImGuiContext
+-- ImGuiContext::ImGuiContext(ImFontAtlas* shared_font_atlas)
 local function CreateContext()
     GImRiceUI = {
         Style = {
@@ -315,7 +316,7 @@ local function CreateContext()
         CurrentWindowStack = ImVector(),
         CurrentWindow = nil,
 
-        IO = {
+        IO = { -- TODO: make IO independent?
             MousePos = ImVec2(),
             IsMouseDown = input.IsMouseDown,
 
@@ -326,7 +327,16 @@ local function CreateContext()
             MouseDownDuration     = {-1, -1},
             MouseDownDurationPrev = {-1, -1},
 
+            MouseDownOwned = {nil, nil},
+
+            MouseClickedTime = {nil, nil},
+            MouseReleasedTime = {nil, nil},
+
             MouseClickedPos = {ImVec2(), ImVec2()},
+
+            WantCaptureMouse = nil,
+            -- WantCaptureKeyboard = nil,
+            -- WantTextInput = nil,
 
             DeltaTime = 1 / 60,
             Framerate = 0
@@ -362,6 +372,8 @@ local function CreateContext()
         FrameCountEnded = -1,
         FrameCountRendered = -1,
 
+        Time = 0,
+
         NextItemData = {
 
         },
@@ -371,10 +383,10 @@ local function CreateContext()
             ItemFlags = 0,
             StatusFlags = 0,
 
-            Rect        = {min = {x = 0, y = 0}, max = {x = 0, y = 0}},
-            NavRect     = {min = {x = 0, y = 0}, max = {x = 0, y = 0}},
-            DisplayRect = {min = {x = 0, y = 0}, max = {x = 0, y = 0}},
-            ClipRect    = {min = {x = 0, y = 0}, max = {x = 0, y = 0}},
+            Rect        = ImRect(),
+            NavRect     = ImRect(),
+            DisplayRect = ImRect(),
+            ClipRect    = ImRect()
             -- Shortcut = 
         },
 
@@ -391,7 +403,11 @@ local function CreateContext()
         FramerateSecPerFrame = {}, -- size = 60
         FramerateSecPerFrameIdx = 0,
         FramerateSecPerFrameCount = 0,
-        FramerateSecPerFrameAccum = 0
+        FramerateSecPerFrameAccum = 0,
+
+        WantCaptureMouseNextFrame = -1,
+        -- WantCaptureKeyboardNextFrame = -1,
+        -- WantTextInputNextFrame = -1
     }
 
     for i = 0, 59 do GImRiceUI.FramerateSecPerFrame[i] = 0 end
@@ -1248,42 +1264,69 @@ local function End()
 end
 
 local function FindHoveredWindowEx()
-    GImRiceUI.HoveredWindow = nil
+    local g = GImRiceUI
 
-    local x, y, w, h
+    g.HoveredWindow = nil
 
-    for i = GImRiceUI.Windows:size(), 1, -1 do
-        local window = GImRiceUI.Windows:at(i)
+    for i = g.Windows:size(), 1, -1 do
+        local window = g.Windows:at(i)
 
         if not window or ((not window.WasActive) or window.Hidden) then continue end
 
-        x, y, w, h = window.Pos.x, window.Pos.y, window.Size.x, window.Size.y
-
         local hit = IsMouseHoveringRect(window.Pos, window.Pos + window.Size)
 
-        if hit and GImRiceUI.HoveredWindow == nil then
-            GImRiceUI.HoveredWindow = window
+        if hit and g.HoveredWindow == nil then
+            g.HoveredWindow = window
 
             break
         end
     end
+end
+
+--- void ImGui::UpdateHoveredWindowAndCaptureFlags
+local function UpdateHoveredWindowAndCaptureFlags()
+    local g = GImRiceUI
+    local io = g.IO
+
+    FindHoveredWindowEx()
+
+    local mouse_earliest_down = -1
+    local mouse_any_down = false
+
+    for i = 1, #MouseButtonMap do
+        if io.MouseClicked[i] then
+            io.MouseDownOwned[i] = (g.HoveredWindow ~= nil)
+        end
+
+        mouse_any_down = mouse_any_down or io.MouseDown[i]
+        if (io.MouseDown[i] or io.MouseReleased[i]) then
+            if (mouse_earliest_down == -1 or (io.MouseClickedTime[i] < io.MouseClickedTime[mouse_earliest_down])) then
+                mouse_earliest_down = i
+            end
+        end
+    end
+
+    local mouse_avail = (mouse_earliest_down == -1) or io.MouseDownOwned[mouse_earliest_down]
+
+    if (g.WantCaptureMouseNextFrame ~= -1) then
+        io.WantCaptureMouse = (g.WantCaptureMouseNextFrame ~= 0)
+    else
+        io.WantCaptureMouse = (mouse_avail and (g.HoveredWindow ~= nil or mouse_any_down)) -- or has_open_popup
+    end
 
     --- Our window isn't actually a window. It doesn't "exist"
     -- need to block input to other game ui like Derma panels
-    if GImRiceUI.HoveredWindow then
-        AttachDummyPanel(0, 0, ScrW(), ScrH())
+    if io.WantCaptureMouse then
+        AttachDummyPanel(0, 0, io.DisplaySize)
     else
-        if x and y and w and h then
-            AttachDummyPanel(x, y, w, h)
-        else
-            DetachDummyPanel()
-        end
+        DetachDummyPanel()
     end
 end
 
 --- ImGui::UpdateMouseInputs()
 local function UpdateMouseInputs()
-    local io = GImRiceUI.IO -- pointer to IO field
+    local g = GImRiceUI
+    local io = g.IO
 
     io.MousePos.x = GetMouseX()
     io.MousePos.y = GetMouseY()
@@ -1292,12 +1335,16 @@ local function UpdateMouseInputs()
         local button_down = io.IsMouseDown(MouseButtonMap[i])
 
         io.MouseClicked[i] = button_down and (io.MouseDownDuration[i] < 0)
+        io.MouseReleased[i] = not button_down and (io.MouseDownDuration[i] >= 0)
 
         if io.MouseClicked[i] then
+            io.MouseClickedTime[i] = g.Time
             io.MouseClickedPos[i] = ImVec2(io.MousePos.x, io.MousePos.y)
         end
 
-        io.MouseReleased[i] = not button_down and (io.MouseDownDuration[i] >= 0)
+        if io.MouseReleased[i] then
+            io.MouseReleasedTime[i] = g.Time
+        end
 
         if button_down then
             if io.MouseDownDuration[i] < 0 then
@@ -1317,6 +1364,8 @@ end
 
 local function NewFrame()
     local g = GImRiceUI
+
+    g.Time = g.Time + g.IO.DeltaTime
 
     if not g or not g.Initialized then return end
 
@@ -1359,7 +1408,7 @@ local function NewFrame()
         window.Active = false
     end
 
-    FindHoveredWindowEx() -- TODO: void ImGui::UpdateHoveredWindowAndCaptureFlags
+    UpdateHoveredWindowAndCaptureFlags()
 
     UpdateMouseMovingWindowNewFrame()
 end
@@ -1375,11 +1424,13 @@ local function EndFrame()
     UpdateMouseMovingWindowEndFrame()
 end
 
-local ImRiceUI_ImplGMOD_Data = ImRiceUI_ImplGMOD_Data or { -- TODO: polish
-    Time = 0
-}
+local ImRiceUI_ImplGMOD_Data = nil
 
 local function ImRiceUI_ImplGMOD_Init()
+    ImRiceUI_ImplGMOD_Data = {
+        Time = 0
+    }
+
     hook.Add("PostGamemodeLoaded", "ImGDummyWindow", function()
         SetupDummyPanel()
     end)
@@ -1391,11 +1442,13 @@ end
 
 local function ImRiceUI_ImplGMOD_NewFrame()
     local io = GImRiceUI.IO
+    local bd = ImRiceUI_ImplGMOD_Data
+
+    io.DisplaySize = ImVec2(ScrW(), ScrH())
 
     local current_time = SysTime()
-    io.DeltaTime = (current_time - ImRiceUI_ImplGMOD_Data.Time) / 1
-
-    ImRiceUI_ImplGMOD_Data.Time = current_time
+    io.DeltaTime = current_time - bd.Time
+    bd.Time = current_time
 end
 
 --- void ImGui::Shutdown()
@@ -1432,13 +1485,15 @@ hook.Add("PostRender", "ImRiceUI", function()
     local g = GImRiceUI
     draw.DrawText(
         str_format(
-            "ActiveID: %s\nActiveIDWindow: %s\nActiveIDIsAlive: %s\nActiveIDPreviousFrame: %s\n\nMem: %dkb\nFramerate: %d",
+            "ActiveID: %s\nActiveIDWindow: %s\nHoveredWindow: %s\nActiveIDIsAlive: %s\nActiveIDPreviousFrame: %s\n\nMem: %dkb\nFramerate: %d\n\n io.WantCaptureMouse: %s",
             g.ActiveID,
             g.ActiveIDWindow and g.ActiveIDWindow.ID or nil,
+            g.HoveredWindow and g.HoveredWindow.ID or nil,
             g.ActiveIDIsAlive,
             g.ActiveIDPreviousFrame,
             ImRound(collectgarbage("count")),
-            g.IO.Framerate
+            g.IO.Framerate,
+            g.IO.WantCaptureMouse
         ), "CloseCaption_Bold", 0, 0, color_white
     )
 
