@@ -26,7 +26,8 @@ local ImDir_Down  = 3
 local IM_FONT_SIZE_MIN = 4
 local IM_FONT_SIZE_MAX = 255
 
-local ImVector, ImVec2, ImVec4, ImVec1, ImRect = include("imriceui_internal.lua")
+local ImVector, ImVec2, ImVec4, ImVec1, ImRect,
+    ImGuiContext, ImGuiWindow = include("imriceui_internal.lua")
 
 local ImResizeGripDef = {
     {CornerPos = ImVec2(1, 1), InnerDir = ImVec2(-1, -1)}, -- Bottom right grip
@@ -92,29 +93,10 @@ local function RenderArrow(draw_list, pos, color, dir, scale)
     AddTriangleFilled(draw_list, {center + a, center + b, center + c}, color)
 end
 
-local FontDataDefault, FontCopy = include("imriceui_h.lua")
+local FontDataDefault, FontCopy, FontDataToString = include("imriceui_h.lua")
 
-local str_format = string.format
 local function ImHashFontData(font_data)
-    local str = str_format("%s%03d%04d%02d%02d%1d%1d%1d%1d%1d%1d%1d%1d%1d%1d",
-        font_data.font       or FontDataDefault.font,
-        font_data.size       or FontDataDefault.size,
-        font_data.weight     or FontDataDefault.weight,
-        font_data.blursize   or FontDataDefault.blursize,
-        font_data.scanlines  or FontDataDefault.scanlines,
-        (font_data.extended  or FontDataDefault.extended)  and 1 or 0,
-        (font_data.antialias or FontDataDefault.antialias) and 1 or 0,
-        (font_data.underline or FontDataDefault.underline) and 1 or 0,
-        (font_data.italic    or FontDataDefault.italic)    and 1 or 0,
-        (font_data.strikeout or FontDataDefault.strikeout) and 1 or 0,
-        (font_data.symbol    or FontDataDefault.symbol)    and 1 or 0,
-        (font_data.rotary    or FontDataDefault.rotary)    and 1 or 0,
-        (font_data.shadow    or FontDataDefault.shadow)    and 1 or 0,
-        (font_data.additive  or FontDataDefault.additive)  and 1 or 0,
-        (font_data.outline   or FontDataDefault.outline)   and 1 or 0
-    )
-
-    return "ImFont" .. ImHashStr(str)
+    return "ImFont" .. ImHashStr(FontDataToString(font_data))
 end
 
 --- Fonts created have a very long lifecycle, since can't be deleted
@@ -244,130 +226,12 @@ local MouseButtonMap = {
     [2] = MOUSE_RIGHT
 }
 
---- struct ImGuiContext
 -- ImGuiContext::ImGuiContext(ImFontAtlas* shared_font_atlas)
 local function CreateContext()
-    GImRiceUI = {
-        Style = {
-            FramePadding = ImVec2(4, 3),
+    GImRiceUI = ImGuiContext()
 
-            WindowRounding = 0,
-
-            Colors = StyleColorsDark,
-
-            FontSizeBase = 18,
-            FontScaleMain = 1,
-
-            WindowMinSize = ImVec2(60, 60),
-
-            FrameBorderSize = 1,
-            ItemSpacing = ImVec2(8, 4)
-        },
-
-        Config = DefaultConfig,
-        Initialized = true,
-
-        Windows = ImVector(), -- Windows sorted in display order, back to front
-        WindowsByID = {}, -- Map window's ID to window ref
-
-        WindowsBorderHoverPadding = 0,
-
-        CurrentWindowStack = ImVector(),
-        CurrentWindow = nil,
-
-        IO = { -- TODO: make IO independent?
-            MousePos = ImVec2(),
-            IsMouseDown = input.IsMouseDown,
-
-            --- Just support 2 buttons now, L & R
-            MouseDown             = {false, false},
-            MouseClicked          = {false, false},
-            MouseReleased         = {false, false},
-            MouseDownDuration     = {-1, -1},
-            MouseDownDurationPrev = {-1, -1},
-
-            MouseDownOwned = {nil, nil},
-
-            MouseClickedTime = {nil, nil},
-            MouseReleasedTime = {nil, nil},
-
-            MouseClickedPos = {ImVec2(), ImVec2()},
-
-            WantCaptureMouse = nil,
-            -- WantCaptureKeyboard = nil,
-            -- WantTextInput = nil,
-
-            DeltaTime = 1 / 60,
-            Framerate = 0
-        },
-
-        MovingWindow = nil,
-        ActiveIDClickOffset = ImVec2(),
-
-        HoveredWindow = nil,
-
-        ActiveID = 0, -- Active widget
-        ActiveIDWindow = nil, -- Active window
-
-        ActiveIDIsJustActivated = false,
-
-        ActiveIDIsAlive = nil,
-
-        ActiveIDPreviousFrame = 0,
-
-        DeactivatedItemData = {
-            ID = 0,
-            ElapseFrame = 0,
-            HasBeenEditedBefore = false,
-            IsAlive = false
-        },
-
-        HoveredID = 0,
-
-        NavWindow = nil,
-
-        FrameCount = 0,
-
-        FrameCountEnded = -1,
-        FrameCountRendered = -1,
-
-        Time = 0,
-
-        NextItemData = {
-
-        },
-
-        LastItemData = {
-            ID = 0,
-            ItemFlags = 0,
-            StatusFlags = 0,
-
-            Rect        = ImRect(),
-            NavRect     = ImRect(),
-            DisplayRect = ImRect(),
-            ClipRect    = ImRect()
-            -- Shortcut = 
-        },
-
-        Font = nil, -- Currently bound *FontName* to be used with surface.SetFont
-        FontSize = 18,
-        FontSizeBase = 18,
-
-        --- Contains ImFontStackData
-        FontStack = ImVector(),
-
-        -- StackSizesInBeginForCurrentWindow = nil,
-
-        --- Misc
-        FramerateSecPerFrame = {}, -- size = 60
-        FramerateSecPerFrameIdx = 0,
-        FramerateSecPerFrameCount = 0,
-        FramerateSecPerFrameAccum = 0,
-
-        WantCaptureMouseNextFrame = -1,
-        -- WantCaptureKeyboardNextFrame = -1,
-        -- WantTextInputNextFrame = -1
-    }
+    GImRiceUI.Style.Colors = StyleColorsDark
+    GImRiceUI.Config = DefaultConfig
 
     for i = 0, 59 do GImRiceUI.FramerateSecPerFrame[i] = 0 end
 
@@ -386,72 +250,13 @@ local function CreateNewWindow(name)
 
     local window_id = ImHashStr(name)
 
-    --- struct IMGUI_API ImGuiWindow
-    local window = {
-        ID = window_id,
+    local window = ImGuiWindow()
 
-        MoveID = 0,
-
-        Name = name,
-        Pos = ImVec2(g.Config.WindowPos.x, g.Config.WindowPos.y),
-        Size = ImVec2(g.Config.WindowSize.w, g.Config.WindowSize.h), -- Current size (==SizeFull or collapsed title bar size)
-        SizeFull = ImVec2(g.Config.WindowSize.w, g.Config.WindowSize.h),
-
-        TitleBarHeight = 0,
-
-        Active = false,
-        WasActive = false,
-
-        Collapsed = false,
-
-        SkipItems = false,
-
-        SkipRefresh = false,
-
-        Hidden = false,
-
-        HiddenFramesCanSkipItems = 0,
-        HiddenFramesCannotSkipItems = 0,
-        HiddenFramesForRenderOnly = 0,
-
-        HasCloseButton = true,
-
-        --- struct ImDrawList
-        DrawList = {
-            CmdBuffer = {},
-
-            _CmdHeader = {},
-            _ClipRectStack = {}
-        },
-
-        IDStack = ImVector(),
-
-        --- struct IMGUI_API ImGuiWindowTempData
-        DC = {
-            CursorPos         = ImVec2(),
-            CursorPosPrevLine = ImVec2(),
-            CursorStartPos    = ImVec2(),
-            CursorMaxPos      = ImVec2(),
-            IdealMaxPos       = ImVec2(),
-            CurrLineSize      = ImVec2(),
-            PrevLineSize      = ImVec2(),
-
-            CurrLineTextBaseOffset = 0,
-            PrevLineTextBaseOffset = 0,
-
-            IsSameLine = false,
-            IsSetPos = false,
-
-            Indent                  = ImVec1(),
-            ColumnsOffset           = ImVec1(),
-            GroupOffset             = ImVec1(),
-            CursorStartPosLossyness = ImVec1()
-        },
-
-        ClipRect = ImRect(),
-
-        LastFrameActive = -1
-    }
+    window.ID = window_id
+    window.Name = name
+    window.Pos = ImVec2(g.Config.WindowPos.x, g.Config.WindowPos.y)
+    window.Size = ImVec2(g.Config.WindowSize.w, g.Config.WindowSize.h) -- TODO: Don't use this Config thing
+    window.SizeFull = ImVec2(g.Config.WindowSize.w, g.Config.WindowSize.h)
 
     g.WindowsByID[window_id] = window
 
@@ -1403,6 +1208,7 @@ ImRiceUI_ImplGMOD_Init()
 
 CreateContext()
 
+local str_format = string.format
 hook.Add("PostRender", "ImRiceUI", function()
     cam.Start2D()
 

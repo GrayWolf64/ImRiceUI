@@ -203,4 +203,198 @@ local function _ImRect(min, max)
     }, ImRect)
 end
 
-return _ImVector, _ImVec2, _ImVec4, _ImVec1, _ImRect
+--- struct ImGuiContext
+local function _Context()
+    return {
+        Style = {
+            FramePadding = _ImVec2(4, 3),
+
+            WindowRounding = 0,
+
+            Colors = nil,
+
+            FontSizeBase = 18,
+            FontScaleMain = 1,
+
+            WindowMinSize = _ImVec2(60, 60),
+
+            FrameBorderSize = 1,
+            ItemSpacing = _ImVec2(8, 4)
+        },
+
+        Config = nil,
+        Initialized = true,
+
+        Windows = _ImVector(), -- Windows sorted in display order, back to front
+        WindowsByID = {}, -- Map window's ID to window ref
+
+        WindowsBorderHoverPadding = 0,
+
+        CurrentWindowStack = _ImVector(),
+        CurrentWindow = nil,
+
+        IO = { -- TODO: make IO independent?
+            MousePos = _ImVec2(),
+            IsMouseDown = input.IsMouseDown,
+
+            --- Just support 2 buttons now, L & R
+            MouseDown             = {false, false},
+            MouseClicked          = {false, false},
+            MouseReleased         = {false, false},
+            MouseDownDuration     = {-1, -1},
+            MouseDownDurationPrev = {-1, -1},
+
+            MouseDownOwned = {nil, nil},
+
+            MouseClickedTime = {nil, nil},
+            MouseReleasedTime = {nil, nil},
+
+            MouseClickedPos = {_ImVec2(), _ImVec2()},
+
+            WantCaptureMouse = nil,
+            -- WantCaptureKeyboard = nil,
+            -- WantTextInput = nil,
+
+            DeltaTime = 1 / 60,
+            Framerate = 0
+        },
+
+        MovingWindow = nil,
+        ActiveIDClickOffset = _ImVec2(),
+
+        HoveredWindow = nil,
+
+        ActiveID = 0, -- Active widget
+        ActiveIDWindow = nil, -- Active window
+
+        ActiveIDIsJustActivated = false,
+
+        ActiveIDIsAlive = nil,
+
+        ActiveIDPreviousFrame = 0,
+
+        DeactivatedItemData = {
+            ID = 0,
+            ElapseFrame = 0,
+            HasBeenEditedBefore = false,
+            IsAlive = false
+        },
+
+        HoveredID = 0,
+
+        NavWindow = nil,
+
+        FrameCount = 0,
+
+        FrameCountEnded = -1,
+        FrameCountRendered = -1,
+
+        Time = 0,
+
+        NextItemData = {
+
+        },
+
+        LastItemData = {
+            ID = 0,
+            ItemFlags = 0,
+            StatusFlags = 0,
+
+            Rect        = _ImRect(),
+            NavRect     = _ImRect(),
+            DisplayRect = _ImRect(),
+            ClipRect    = _ImRect()
+            -- Shortcut = 
+        },
+
+        Font = nil, -- Currently bound *FontName* to be used with surface.SetFont
+        FontSize = 18,
+        FontSizeBase = 18,
+
+        --- Contains ImFontStackData
+        FontStack = _ImVector(),
+
+        -- StackSizesInBeginForCurrentWindow = nil,
+
+        --- Misc
+        FramerateSecPerFrame = {}, -- size = 60
+        FramerateSecPerFrameIdx = 0,
+        FramerateSecPerFrameCount = 0,
+        FramerateSecPerFrameAccum = 0,
+
+        WantCaptureMouseNextFrame = -1,
+        -- WantCaptureKeyboardNextFrame = -1,
+        -- WantTextInputNextFrame = -1
+    }
+end
+
+--- struct IMGUI_API ImGuiWindow
+local function _Window()
+    return {
+        ID = 0,
+
+        MoveID = 0,
+
+        Name = "",
+        Pos = nil,
+        Size = nil, -- Current size (==SizeFull or collapsed title bar size)
+        SizeFull = nil,
+
+        TitleBarHeight = 0,
+
+        Active = false,
+        WasActive = false,
+
+        Collapsed = false,
+
+        SkipItems = false,
+
+        SkipRefresh = false,
+
+        Hidden = false,
+
+        HiddenFramesCanSkipItems = 0,
+        HiddenFramesCannotSkipItems = 0,
+        HiddenFramesForRenderOnly = 0,
+
+        HasCloseButton = true,
+
+        --- struct ImDrawList
+        DrawList = {
+            CmdBuffer = {},
+
+            _CmdHeader = {},
+            _ClipRectStack = {}
+        },
+
+        IDStack = _ImVector(),
+
+        --- struct IMGUI_API ImGuiWindowTempData
+        DC = {
+            CursorPos         = _ImVec2(),
+            CursorPosPrevLine = _ImVec2(),
+            CursorStartPos    = _ImVec2(),
+            CursorMaxPos      = _ImVec2(),
+            IdealMaxPos       = _ImVec2(),
+            CurrLineSize      = _ImVec2(),
+            PrevLineSize      = _ImVec2(),
+
+            CurrLineTextBaseOffset = 0,
+            PrevLineTextBaseOffset = 0,
+
+            IsSameLine = false,
+            IsSetPos = false,
+
+            Indent                  = _ImVec1(),
+            ColumnsOffset           = _ImVec1(),
+            GroupOffset             = _ImVec1(),
+            CursorStartPosLossyness = _ImVec1()
+        },
+
+        ClipRect = _ImRect(),
+
+        LastFrameActive = -1
+    }
+end
+
+return _ImVector, _ImVec2, _ImVec4, _ImVec1, _ImRect, _Context, _Window

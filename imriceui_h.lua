@@ -27,6 +27,27 @@ local function FontCopy(font_data)
     return copy
 end
 
+local str_format = string.format
+local function FontDataToString(font_data)
+    return str_format("%s%03d%04d%02d%02d%1d%1d%1d%1d%1d%1d%1d%1d%1d%1d",
+        font_data.font       or FontDataDefault.font,
+        font_data.size       or FontDataDefault.size,
+        font_data.weight     or FontDataDefault.weight,
+        font_data.blursize   or FontDataDefault.blursize,
+        font_data.scanlines  or FontDataDefault.scanlines,
+        (font_data.extended  or FontDataDefault.extended)  and 1 or 0,
+        (font_data.antialias or FontDataDefault.antialias) and 1 or 0,
+        (font_data.underline or FontDataDefault.underline) and 1 or 0,
+        (font_data.italic    or FontDataDefault.italic)    and 1 or 0,
+        (font_data.strikeout or FontDataDefault.strikeout) and 1 or 0,
+        (font_data.symbol    or FontDataDefault.symbol)    and 1 or 0,
+        (font_data.rotary    or FontDataDefault.rotary)    and 1 or 0,
+        (font_data.shadow    or FontDataDefault.shadow)    and 1 or 0,
+        (font_data.additive  or FontDataDefault.additive)  and 1 or 0,
+        (font_data.outline   or FontDataDefault.outline)   and 1 or 0
+    )
+end
+
 --- enum ImGuiWindowFlags_
 local ImGuiWindowFlags_ = {
     None                      = 0,
@@ -105,4 +126,4 @@ local ImGuiItemStatusFlags_ = {
 -- ImGuiItemStatusFlags_.Checked   = bit.lshift(1, 23)
 -- ImGuiItemStatusFlags_.Inputable = bit.lshift(1, 24)
 
-return FontDataDefault, FontCopy
+return FontDataDefault, FontCopy, FontDataToString
